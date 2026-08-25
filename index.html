@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>আলোর যাত্রা — মহাকাশ ও সমুদ্র</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,500&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --void:#04060d;
+    --navy:#0b1026;
+    --nebula:#7c5cff;
+    --gold:#f4c95d;
+    --deep-teal:#04262c;
+    --bio-cyan:#3ce9c8;
+    --coral:#ff6b5c;
+    --ink:#eef1fb;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:var(--void); font-family:'Space Grotesk',sans-serif; color:var(--ink);}
+  #canvas-wrap{position:fixed; inset:0;}
+  canvas{display:block; touch-action:none;}
+
+  /* ---------- Loading ---------- */
+  #loader{
+    position:fixed; inset:0; z-index:100; background:radial-gradient(ellipse at center, #0b1026 0%, #04060d 70%);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px;
+    transition:opacity 1s ease, visibility 1s ease;
+  }
+  #loader.hide{opacity:0; visibility:hidden; pointer-events:none;}
+  .loader-title{font-family:'Cormorant Garamond', serif; font-style:italic; font-weight:500; font-size:clamp(28px,6vw,46px); letter-spacing:.5px; color:var(--ink);}
+  .loader-bar{width:220px; height:2px; background:rgba(255,255,255,.12); position:relative; overflow:hidden; border-radius:2px;}
+  .loader-bar::after{content:''; position:absolute; left:-40%; top:0; bottom:0; width:40%; background:linear-gradient(90deg, transparent, var(--bio-cyan), var(--nebula), transparent); animation:sweep 1.3s ease-in-out infinite;}
+  @keyframes sweep{ 0%{left:-40%;} 100%{left:100%;} }
+  .loader-sub{font-size:12px; letter-spacing:2px; text-transform:uppercase; color:rgba(238,241,251,.5);}
+
+  /* ---------- Top wordmark ---------- */
+  #wordmark{
+    position:fixed; top:22px; left:26px; z-index:20;
+    font-family:'Cormorant Garamond',serif; font-style:italic; font-weight:500;
+    font-size:clamp(18px,3vw,24px); letter-spacing:.5px; pointer-events:none;
+    text-shadow:0 2px 20px rgba(0,0,0,.6);
+  }
+  #wordmark span{display:block; font-family:'Space Grotesk',sans-serif; font-style:normal; font-size:10px; letter-spacing:3px; text-transform:uppercase; opacity:.55; margin-top:2px;}
+
+  /* ---------- Mode toggle ---------- */
+  #mode-toggle{
+    position:fixed; bottom:26px; left:50%; transform:translateX(-50%); z-index:30;
+    display:flex; gap:0; background:rgba(10,12,24,.55); backdrop-filter:blur(14px);
+    border:1px solid rgba(255,255,255,.12); border-radius:999px; padding:4px; box-shadow:0 8px 30px rgba(0,0,0,.4);
+  }
+  .mode-btn{
+    border:none; background:transparent; color:rgba(238,241,251,.65); font-family:'Space Grotesk',sans-serif;
+    font-size:13px; letter-spacing:1px; padding:10px 20px; border-radius:999px; cursor:pointer;
+    transition:background .4s ease, color .4s ease; display:flex; align-items:center; gap:8px;
+  }
+  .mode-btn.active{background:linear-gradient(135deg, var(--nebula), var(--bio-cyan)); color:#04060d; font-weight:600;}
+  .mode-btn:not(.active):hover{color:var(--ink);}
+
+  /* ---------- Controls hint ---------- */
+  #hint{
+    position:fixed; bottom:26px; right:26px; z-index:20; text-align:right;
+    font-size:11px; line-height:1.8; letter-spacing:.5px; color:rgba(238,241,251,.5);
+    pointer-events:none; transition:opacity .6s ease;
+  }
+  #hint b{color:rgba(238,241,251,.85); font-weight:500;}
+
+  /* ---------- Info panel ---------- */
+  #info-panel{
+    position:fixed; top:22px; right:26px; z-index:30; width:min(280px, 78vw);
+    background:rgba(10,12,24,.6); backdrop-filter:blur(16px); border:1px solid rgba(255,255,255,.12);
+    border-radius:14px; padding:18px 20px; opacity:0; transform:translateY(-10px) scale(.98);
+    pointer-events:none; transition:opacity .45s ease, transform .45s ease;
+  }
+  #info-panel.show{opacity:1; transform:translateY(0) scale(1); pointer-events:auto;}
+  #info-panel .eyebrow{font-size:10px; letter-spacing:2px; text-transform:uppercase; color:var(--bio-cyan);}
+  #info-panel h3{font-family:'Cormorant Garamond',serif; font-weight:600; font-size:22px; margin:6px 0 8px; color:var(--ink);}
+  #info-panel p{font-size:12.5px; line-height:1.6; color:rgba(238,241,251,.75); margin:0;}
+
+  /* ---------- Mobile joystick ---------- */
+  #joy{position:fixed; z-index:25; bottom:100px; left:26px; width:96px; height:96px; border-radius:50%; border:1px solid rgba(255,255,255,.18); background:rgba(255,255,255,.05); display:none; touch-action:none;}
+  #joy-knob{position:absolute; width:40px; height:40px; border-radius:50%; background:rgba(255,255,255,.25); left:28px; top:28px; box-shadow:0 0 20px rgba(255,255,255,.15);}
+  @media (pointer:coarse){ #joy{display:block;} #hint{display:none;} }
+
+  /* ---------- Transition veil ---------- */
+  #veil{position:fixed; inset:0; z-index:60; pointer-events:none; opacity:0; background:#04060d;}
+
+  /* ---------- Crosshair-free focus dot ---------- */
+  #reticle{position:fixed; top:50%; left:50%; width:5px; height:5px; margin:-2.5px 0 0 -2.5px; border-radius:50%; background:rgba(238,241,251,.55); z-index:15; pointer-events:none; box-shadow:0 0 8px rgba(238,241,251,.4);}
+</style>
+</head>
+<body>
+
+<div id="canvas-wrap"></div>
+<div id="reticle"></div>
+
+<div id="loader">
+  <div class="loader-title">আলোর যাত্রা শুরু হচ্ছে…</div>
+  <div class="loader-bar"></div>
+  <div class="loader-sub">Building the cosmos</div>
+</div>
+
+<div id="wordmark">আলোর যাত্রা<span>Above the sky · Below the sea</span></div>
+
+<div id="mode-toggle">
+  <button class="mode-btn active" data-mode="space">✦ মহাকাশ</button>
+  <button class="mode-btn" data-mode="ocean">〜 সমুদ্র</button>
+</div>
+
+<div id="hint"><b>WASD</b> ঘোরাফেরা &nbsp;·&nbsp; <b>মাউস ড্র্যাগ</b> তাকানো &nbsp;·&nbsp; <b>ক্লিক</b> বিস্তারিত জানুন</div>
+
+<div id="joy"><div id="joy-knob"></div></div>
+
+<div id="info-panel">
+  <div class="eyebrow">নিকটে</div>
+  <h3 id="info-title">—</h3>
+  <p id="info-body">—</p>
+</div>
+
+<div id="veil"></div>
+
+<script type="importmap">
+{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+/* =========================================================================
+   UTILITIES
+   ========================================================================= */
+function makeCanvasTexture(draw, size=256){
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const ctx = c.getContext('2d');
+  draw(ctx, size);
+  const tex = new THREE.CanvasTexture(c);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+function planetTexture(base, accent, noisy=true){
+  return makeCanvasTexture((ctx,s)=>{
+    ctx.fillStyle = base; ctx.fillRect(0,0,s,s);
+    for(let i=0;i<(noisy? 2200:900); i++){
+      const x = Math.random()*s, y = Math.random()*s, r = Math.random()*s*0.02+1;
+      ctx.fillStyle = accent; ctx.globalAlpha = Math.random()*0.35;
+      ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    // bands
+    for(let i=0;i<6;i++){
+      ctx.fillStyle = accent; ctx.globalAlpha = 0.06;
+      const y = Math.random()*s;
+      ctx.fillRect(0,y,s,Math.random()*10+2);
+    }
+    ctx.globalAlpha = 1;
+  }, 256);
+}
+
+function glowSprite(color, size=1){
+  const tex = makeCanvasTexture((ctx,s)=>{
+    const g = ctx.createRadialGradient(s/2,s/2,0,s/2,s/2,s/2);
+    g.addColorStop(0, 'rgba(255,255,255,0.9)');
+    g.addColorStop(0.2, color);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g; ctx.fillRect(0,0,s,s);
+  }, 128);
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent:true, blending: THREE.AdditiveBlending, depthWrite:false });
+  const spr = new THREE.Sprite(mat);
+  spr.scale.set(size,size,1);
+  return spr;
+}
+
+function ringTexture(color){
+  return makeCanvasTexture((ctx,s)=>{
+    const g = ctx.createRadialGradient(s/2,s/2,s*0.3,s/2,s/2,s*0.5);
+    g.addColorStop(0,'rgba(0,0,0,0)');
+    g.addColorStop(0.4,color); g.addColorStop(0.6,'rgba(255,255,255,0.4)');
+    g.addColorStop(0.75,color); g.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle = g; ctx.fillRect(0,0,s,s);
+  }, 256);
+}
+
+const clock = new THREE.Clock();
+const raycaster = new THREE.Raycaster();
+const mouseNDC = new THREE.Vector2();
+
+/* =========================================================================
+   RENDERER / CAMERA / SCENE ROOTS
+   ========================================================================= */
+const renderer = new THREE.WebGLRenderer({ antialias:true, powerPreference:'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.getElementById('canvas-wrap').appendChild(renderer.domElement);
+
+const camera = new THREE.PerspectiveCamera(62, innerWidth/innerHeight, 0.05, 4000);
+
+const spaceScene = new THREE.Scene();
+const oceanScene = new THREE.Scene();
+
+/* =========================================================================
+   SPACE WORLD
+   ========================================================================= */
+spaceScene.background = new THREE.Color(0x03040a);
+spaceScene.fog = new THREE.FogExp2(0x03040a, 0.0009);
+
+// starfield
+(function buildStars(){
+  const counts = [3200, 1400];
+  const sizes = [1.1, 2.1];
+  const cols = [0xffffff, 0x9fb8ff];
+  for(let layer=0; layer<2; layer++){
+    const geo = new THREE.BufferGeometry();
+    const pos = new Float32Array(counts[layer]*3);
+    for(let i=0;i<counts[layer];i++){
+      const r = 600 + Math.random()*1600;
+      const theta = Math.random()*Math.PI*2, phi = Math.acos(2*Math.random()-1);
+      pos[i*3] = r*Math.sin(phi)*Math.cos(theta);
+      pos[i*3+1] = r*Math.sin(phi)*Math.sin(theta);
+      pos[i*3+2] = r*Math.cos(phi);
+    }
+    geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+    const mat = new THREE.PointsMaterial({ color: cols[layer], size: sizes[layer], sizeAttenuation:true, transparent:true, opacity:0.9 });
+    spaceScene.add(new THREE.Points(geo, mat));
+  }
+})();
+
+// nebula sprites
+const nebulaColors = ['rgba(124,92,255,0.35)','rgba(60,233,200,0.22)','rgba(255,107,92,0.18)'];
+for(let i=0;i<9;i++){
+  const s = glowSprite(nebulaColors[i%nebulaColors.length], 260 + Math.random()*380);
+  const r = 500 + Math.random()*900, theta = Math.random()*Math.PI*2, phi = Math.acos(2*Math.random()-1);
+  s.position.set(r*Math.sin(phi)*Math.cos(theta), r*Math.sin(phi)*Math.sin(theta)*0.5, r*Math.cos(phi));
+  spaceScene.add(s);
+}
+
+const spaceLight = new THREE.AmbientLight(0x334066, 0.55);
+spaceScene.add(spaceLight);
+
+// sun
+const sunGroup = new THREE.Group();
+const sunMat = new THREE.MeshBasicMaterial({ map: planetTexture('#ffd27a','#ff8c3c', true) });
+const sun = new THREE.Mesh(new THREE.SphereGeometry(14, 48, 48), sunMat);
+sunGroup.add(sun);
+sunGroup.add(glowSprite('rgba(255,200,110,0.9)', 90));
+const sunPointLight = new THREE.PointLight(0xffdca0, 3.2, 2200, 1.4);
+sunGroup.add(sunPointLight);
+sunGroup.userData = { name:'সূর্য · Aurel', info:'এই জগতের কেন্দ্র। এর আলোই প্রতিটি গ্রহে জীবনের ছায়া ফেলে।', focusDist: 40 };
+spaceScene.add(sunGroup);
+
+const planetDefs = [
+  { name:'ইথারা', dist:34, size:2.1, speed:0.55, base:'#8c9bff', accent:'#3d4a99', info:'ধাতব বায়ুমণ্ডলে ঢাকা একটি ছোট্ট শীতল গ্রহ, চিরকাল কুয়াশায় মোড়ানো।' },
+  { name:'ভেরিডন', dist:48, size:3.0, speed:0.4, base:'#5fd9a0', accent:'#1f7a55', info:'সবুজাভ মহাসাগরে ভরা একটি জগৎ — এখানে বলা হয় প্রাণের প্রথম স্পন্দন ঘটেছিল।', ring:false },
+  { name:'ক্রিমসন-৯', dist:66, size:2.6, speed:0.3, base:'#e5533d', accent:'#7a1f14', info:'লালচে ধুলোঝড়ে ঢাকা মরুগ্রহ, দিগন্তে সবসময় আগুনরঙা আকাশ।' },
+  { name:'সাতুরিন', dist:90, size:5.4, speed:0.22, base:'#e9c98a', accent:'#a5762e', info:'সোনালি বলয়ে ঘেরা এই দৈত্যাকার গ্রহটিই এই জগতের সবচেয়ে দর্শনীয় বস্তু।', ring:true },
+  { name:'নক্স', dist:118, size:3.4, speed:0.16, base:'#7b6fd6', accent:'#2e2566', info:'বেগুনি বরফে ঢাকা প্রত্যন্ত এক জগৎ, সূর্যের আলো এখানে পৌঁছায় ম্লান হয়ে।' },
+  { name:'অ্যাবিসাল', dist:150, size:2.9, speed:0.11, base:'#3ce9c8', accent:'#0c5c50', info:'এই জগতের প্রান্তে একলা ঘোরা বরফ-নীল গ্রহ, রাতের আকাশে সবচেয়ে ম্লান তারা।' },
+];
+
+const planets = [];
+planetDefs.forEach(def=>{
+  const group = new THREE.Group();
+  const mat = new THREE.MeshStandardMaterial({ map: planetTexture(def.base, def.accent), roughness:0.85, metalness:0.05 });
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(def.size, 40, 40), mat);
+  mesh.rotation.z = Math.random()*0.4;
+  group.add(mesh);
+  if(def.ring){
+    const ring = new THREE.Mesh(new THREE.RingGeometry(def.size*1.5, def.size*2.6, 64), new THREE.MeshBasicMaterial({ map: ringTexture(def.accent), transparent:true, side:THREE.DoubleSide }));
+    ring.rotation.x = Math.PI/2.4;
+    group.add(ring);
+  }
+  const angle = Math.random()*Math.PI*2;
+  group.userData = { ...def, angle, focusDist: def.size*7+4 };
+  group.position.set(Math.cos(angle)*def.dist, 0, Math.sin(angle)*def.dist);
+  spaceScene.add(group);
+  planets.push({ mesh: group, coreMesh: mesh, ...def, angle });
+
+  // orbit ring line
+  const orbPts = [];
+  for(let i=0;i<=128;i++){ const t=i/128*Math.PI*2; orbPts.push(new THREE.Vector3(Math.cos(t)*def.dist,0,Math.sin(t)*def.dist)); }
+  const orbGeo = new THREE.BufferGeometry().setFromPoints(orbPts);
+  spaceScene.add(new THREE.Line(orbGeo, new THREE.LineBasicMaterial({ color:0x445, transparent:true, opacity:0.25 })));
+});
+
+// asteroid belt
+const asteroidGeo = new THREE.IcosahedronGeometry(0.5, 0);
+const asteroidMat = new THREE.MeshStandardMaterial({ color:0x8a8a92, roughness:1 });
+const asteroidMesh = new THREE.InstancedMesh(asteroidGeo, asteroidMat, 420);
+const dummy = new THREE.Object3D();
+for(let i=0;i<420;i++){
+  const r = 76 + Math.random()*8, t = Math.random()*Math.PI*2;
+  dummy.position.set(Math.cos(t)*r, (Math.random()-0.5)*3, Math.sin(t)*r);
+  dummy.rotation.set(Math.random()*6,Math.random()*6,Math.random()*6);
+  const s = 0.3+Math.random()*0.9; dummy.scale.set(s,s,s);
+  dummy.updateMatrix();
+  asteroidMesh.setMatrixAt(i, dummy.matrix);
+}
+spaceScene.add(asteroidMesh);
+
+/* =========================================================================
+   OCEAN WORLD
+   ========================================================================= */
+oceanScene.background = new THREE.Color(0x03181c);
+oceanScene.fog = new THREE.FogExp2(0x042630, 0.035);
+
+const oceanAmbient = new THREE.AmbientLight(0x2a6a70, 0.9);
+oceanScene.add(oceanAmbient);
+const sunShaft = new THREE.DirectionalLight(0xbfffe9, 0.9);
+sunShaft.position.set(30, 60, 10);
+oceanScene.add(sunShaft);
+
+// caustic-ish surface glow far above
+const surfaceGlow = glowSprite('rgba(180,255,240,0.5)', 240);
+surfaceGlow.position.set(0, 45, 0);
+oceanScene.add(surfaceGlow);
+
+// seabed
+const sandTex = makeCanvasTexture((ctx,s)=>{
+  ctx.fillStyle = '#0e3a3c'; ctx.fillRect(0,0,s,s);
+  for(let i=0;i<3000;i++){
+    ctx.fillStyle = Math.random()>0.5 ? 'rgba(255,225,180,0.06)' : 'rgba(0,0,0,0.08)';
+    ctx.beginPath(); ctx.arc(Math.random()*s, Math.random()*s, Math.random()*2+0.5, 0, 7); ctx.fill();
+  }
+}, 512);
+sandTex.wrapS = sandTex.wrapT = THREE.RepeatWrapping; sandTex.repeat.set(12,12);
+const seabed = new THREE.Mesh(new THREE.PlaneGeometry(500,500,40,40), new THREE.MeshStandardMaterial({ map: sandTex, roughness:1 }));
+seabed.rotation.x = -Math.PI/2; seabed.position.y = -18;
+// gentle bumps
+{
+  const posAttr = seabed.geometry.attributes.position;
+  for(let i=0;i<posAttr.count;i++){
+    const y = Math.sin(posAttr.getX(i)*0.05)*Math.cos(posAttr.getY(i)*0.05)*2;
+    posAttr.setZ(i, y);
+  }
+  seabed.geometry.computeVertexNormals();
+}
+oceanScene.add(seabed);
+
+// coral clusters
+const coralPalette = [0xff6b5c, 0xffa45c, 0xff5c9d, 0xf4c95d];
+function makeCoral(x,z){
+  const g = new THREE.Group();
+  const n = 5 + Math.floor(Math.random()*5);
+  for(let i=0;i<n;i++){
+    const col = coralPalette[Math.floor(Math.random()*coralPalette.length)];
+    const h = 1.5 + Math.random()*3;
+    const geo = Math.random()>0.5 ? new THREE.ConeGeometry(0.3+Math.random()*0.3, h, 6) : new THREE.CapsuleGeometry(0.2, h*0.7, 4, 6);
+    const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: col, roughness:0.6, emissive: col, emissiveIntensity:0.12 }));
+    mesh.position.set((Math.random()-0.5)*2.2, h/2, (Math.random()-0.5)*2.2);
+    mesh.rotation.z = (Math.random()-0.5)*0.5;
+    g.add(mesh);
+  }
+  g.position.set(x, -18, z);
+  return g;
+}
+for(let i=0;i<26;i++){
+  const a = Math.random()*Math.PI*2, r = 8 + Math.random()*70;
+  oceanScene.add(makeCoral(Math.cos(a)*r, Math.sin(a)*r));
+}
+
+// rocks
+const rockGeo = new THREE.IcosahedronGeometry(1,0);
+const rockMat = new THREE.MeshStandardMaterial({ color:0x1c3d3f, roughness:1 });
+for(let i=0;i<30;i++){
+  const m = new THREE.Mesh(rockGeo, rockMat);
+  const a = Math.random()*Math.PI*2, r = 5+Math.random()*80;
+  m.position.set(Math.cos(a)*r, -18+Math.random()*0.6, Math.sin(a)*r);
+  const s = 0.8+Math.random()*2.4; m.scale.set(s,s*0.7,s);
+  m.rotation.y = Math.random()*6;
+  oceanScene.add(m);
+}
+
+// bubbles
+const bubbleCount = 500;
+const bubbleGeo = new THREE.BufferGeometry();
+const bubblePos = new Float32Array(bubbleCount*3);
+const bubbleSpeed = new Float32Array(bubbleCount);
+for(let i=0;i<bubbleCount;i++){
+  bubblePos[i*3] = (Math.random()-0.5)*160;
+  bubblePos[i*3+1] = -18+Math.random()*60;
+  bubblePos[i*3+2] = (Math.random()-0.5)*160;
+  bubbleSpeed[i] = 0.3+Math.random()*0.6;
+}
+bubbleGeo.setAttribute('position', new THREE.BufferAttribute(bubblePos,3));
+const bubbleMat = new THREE.PointsMaterial({ color:0xbdfff0, size:0.35, transparent:true, opacity:0.55, sizeAttenuation:true });
+const bubbles = new THREE.Points(bubbleGeo, bubbleMat);
+oceanScene.add(bubbles);
+
+// fish species: build a low-poly fish mesh factory
+function makeFish(color, scale=1){
+  const g = new THREE.Group();
+  const bodyMat = new THREE.MeshStandardMaterial({ color, roughness:0.4, metalness:0.15, emissive:color, emissiveIntensity:0.08 });
+  const body = new THREE.Mesh(new THREE.ConeGeometry(0.35,1.3,8), bodyMat);
+  body.rotation.x = Math.PI/2; body.rotation.z = Math.PI;
+  g.add(body);
+  const tail = new THREE.Mesh(new THREE.ConeGeometry(0.32,0.5,6), bodyMat);
+  tail.position.z = 0.75; tail.rotation.x = -Math.PI/2;
+  g.add(tail);
+  g.scale.setScalar(scale);
+  g.userData.tail = tail;
+  return g;
+}
+
+const fishSpecies = [
+  { color:0xffb84d, count:22, r:14, y:-10, speed:0.6, name:'সোনালি ঝাঁক', info:'ঘন ঝাঁক বেঁধে চলা ছোট মাছের দল, আলো পড়লে সোনার মতো ঝিলিক দেয়।' },
+  { color:0x5cc9ff, count:16, r:22, y:-6, speed:0.45, name:'নীলপরী মাছ', info:'হালকা নীল আঁশযুক্ত এই মাছগুলো প্রবালের কাছাকাছি ঘোরাফেরা করে।' },
+  { color:0xff5c9d, count:10, r:30, y:-13, speed:0.35, name:'গোলাপি চিত্রা', info:'একা একা ঘোরা রঙিন মাছ, সচরাচর পাথরের ফাঁকে লুকিয়ে থাকে।' },
+];
+const fishSchools = [];
+fishSpecies.forEach(sp=>{
+  const school = { fish:[], def:sp, center:new THREE.Vector3((Math.random()-0.5)*40,sp.y,(Math.random()-0.5)*40), t:Math.random()*100 };
+  for(let i=0;i<sp.count;i++){
+    const f = makeFish(sp.color, 0.5+Math.random()*0.4);
+    f.userData.name = sp.name; f.userData.info = sp.info;
+    f.userData.offset = new THREE.Vector3((Math.random()-0.5)*sp.r*0.6,(Math.random()-0.5)*3,(Math.random()-0.5)*sp.r*0.6);
+    f.userData.phase = Math.random()*Math.PI*2;
+    oceanScene.add(f);
+    school.fish.push(f);
+  }
+  fishSchools.push(school);
+});
+
+// jellyfish
+const jellies = [];
+for(let i=0;i<7;i++){
+  const g = new THREE.Group();
+  const cap = new THREE.Mesh(new THREE.SphereGeometry(1,16,10,0,Math.PI*2,0,Math.PI/1.8), new THREE.MeshStandardMaterial({ color:0x9d7bff, transparent:true, opacity:0.55, emissive:0x6c3ce9, emissiveIntensity:0.4, roughness:0.3 }));
+  g.add(cap);
+  const tentacles = [];
+  for(let t=0;t<8;t++){
+    const pts = []; for(let s=0;s<=6;s++) pts.push(new THREE.Vector3((Math.random()-0.5)*0.1, -s*0.35, (Math.random()-0.5)*0.1));
+    const geo = new THREE.BufferGeometry().setFromPoints(pts);
+    const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color:0xbfa5ff, transparent:true, opacity:0.5 }));
+    const ang = (t/8)*Math.PI*2;
+    line.position.set(Math.cos(ang)*0.5,-0.2,Math.sin(ang)*0.5);
+    g.add(line); tentacles.push(line);
+  }
+  g.position.set((Math.random()-0.5)*80, -10+Math.random()*15, (Math.random()-0.5)*80);
+  g.userData = { name:'দীপ্তিময় জেলিফিশ', info:'আলো ছড়ানো স্বচ্ছ প্রাণী, ধীরে ধীরে স্পন্দিত হয়ে জলে ভেসে বেড়ায়।', phase: Math.random()*10, tentacles };
+  oceanScene.add(g);
+  jellies.push(g);
+}
+
+const clickables = [sunGroup, ...planets.map(p=>p.mesh), ...fishSchools.flatMap(s=>s.fish), ...jellies];
+
+/* =========================================================================
+   MOVEMENT CONTROLLER (shared, first-person free-fly)
+   ========================================================================= */
+const state = {
+  mode:'space',
+  pos: new THREE.Vector3(0, 8, 46),
+  yaw: -0.05, pitch: -0.08,
+  vel: new THREE.Vector3(),
+  keys: {},
+  dragging:false, lastX:0, lastY:0,
+  joyVec:{x:0,y:0}, joyActive:false,
+};
+camera.position.copy(state.pos);
+
+const modeConfig = {
+  space: { pos:new THREE.Vector3(0,8,46), yaw:-0.05, pitch:-0.08, speed:22, damp:3.2 },
+  ocean: { pos:new THREE.Vector3(0,-8,26), yaw:0.1, pitch:-0.05, speed:9, damp:4.4 },
+};
+
+// desktop drag-look
+renderer.domElement.addEventListener('pointerdown', e=>{ state.dragging=true; state.lastX=e.clientX; state.lastY=e.clientY; });
+addEventListener('pointerup', ()=> state.dragging=false);
+addEventListener('pointermove', e=>{
+  if(!state.dragging) return;
+  const dx = e.clientX-state.lastX, dy = e.clientY-state.lastY;
+  state.lastX = e.clientX; state.lastY = e.clientY;
+  state.yaw -= dx*0.0032;
+  state.pitch -= dy*0.0032;
+  state.pitch = Math.max(-1.4, Math.min(1.4, state.pitch));
+});
+addEventListener('keydown', e=> state.keys[e.key.toLowerCase()]=true);
+addEventListener('keyup', e=> state.keys[e.key.toLowerCase()]=false);
+
+// mobile joystick (movement) + look via drag on right side
+const joy = document.getElementById('joy'), joyKnob = document.getElementById('joy-knob');
+let joyTouchId = null, lookTouchId = null, lookLastX=0, lookLastY=0;
+addEventListener('touchstart', e=>{
+  for(const t of e.changedTouches){
+    if(t.clientX < innerWidth*0.5 && joyTouchId===null){
+      joyTouchId = t.identifier; state.joyActive = true;
+    } else if(lookTouchId===null){
+      lookTouchId = t.identifier; lookLastX=t.clientX; lookLastY=t.clientY;
+    }
+  }
+}, {passive:true});
+addEventListener('touchmove', e=>{
+  for(const t of e.changedTouches){
+    if(t.identifier === joyTouchId){
+      const r = joy.getBoundingClientRect();
+      const cx = r.left+r.width/2, cy = r.top+r.height/2;
+      let dx = t.clientX-cx, dy = t.clientY-cy;
+      const max = 40; const len = Math.hypot(dx,dy);
+      if(len>max){ dx = dx/len*max; dy = dy/len*max; }
+      joyKnob.style.left = (28+dx)+'px'; joyKnob.style.top = (28+dy)+'px';
+      state.joyVec.x = dx/max; state.joyVec.y = dy/max;
+    } else if(t.identifier === lookTouchId){
+      const dx = t.clientX-lookLastX, dy = t.clientY-lookLastY;
+      lookLastX=t.clientX; lookLastY=t.clientY;
+      state.yaw -= dx*0.004; state.pitch -= dy*0.004;
+      state.pitch = Math.max(-1.4, Math.min(1.4, state.pitch));
+    }
+  }
+}, {passive:true});
+addEventListener('touchend', e=>{
+  for(const t of e.changedTouches){
+    if(t.identifier === joyTouchId){ joyTouchId=null; state.joyVec.x=0; state.joyVec.y=0; joyKnob.style.left='28px'; joyKnob.style.top='28px'; }
+    if(t.identifier === lookTouchId) lookTouchId=null;
+  }
+}, {passive:true});
+
+// scroll = move forward/back (extra) — desktop nicety
+addEventListener('wheel', e=>{
+  const cfg = modeConfig[state.mode];
+  const dir = new THREE.Vector3(Math.sin(state.yaw)*Math.cos(state.pitch), Math.sin(state.pitch), Math.cos(state.yaw)*Math.cos(state.pitch)*-1);
+  state.pos.addScaledVector(dir, -e.deltaY*0.02);
+}, {passive:true});
+
+function updateMovement(dt){
+  const cfg = modeConfig[state.mode];
+  const forward = new THREE.Vector3(Math.sin(state.yaw)*Math.cos(state.pitch), Math.sin(state.pitch), Math.cos(state.yaw)*Math.cos(state.pitch)*-1);
+  const right = new THREE.Vector3(Math.cos(state.yaw), 0, Math.sin(state.yaw));
+  let move = new THREE.Vector3();
+  if(state.keys['w']||state.keys['arrowup']) move.add(forward);
+  if(state.keys['s']||state.keys['arrowdown']) move.addScaledVector(forward,-1);
+  if(state.keys['d']||state.keys['arrowright']) move.add(right);
+  if(state.keys['a']||state.keys['arrowleft']) move.addScaledVector(right,-1);
+  // joystick
+  move.addScaledVector(right, state.joyVec.x);
+  move.addScaledVector(forward, -state.joyVec.y);
+  if(move.lengthSq()>0) move.normalize();
+  const boost = state.keys['shift'] ? 1.8 : 1;
+  state.vel.lerp(move.multiplyScalar(cfg.speed*boost), 1-Math.exp(-cfg.damp*dt));
+  state.pos.addScaledVector(state.vel, dt);
+  // gentle bounds
+  if(state.mode==='ocean') state.pos.y = Math.max(-17, Math.min(40, state.pos.y));
+  else state.pos.y = Math.max(-120, Math.min(120, state.pos.y));
+
+  camera.position.copy(state.pos);
+  camera.rotation.set(0,0,0);
+  camera.rotateY(state.yaw);
+  camera.rotateX(state.pitch);
+}
+
+/* =========================================================================
+   RAYCAST INFO PANEL
+   ========================================================================= */
+const infoPanel = document.getElementById('info-panel');
+const infoTitle = document.getElementById('info-title');
+const infoBody = document.getElementById('info-body');
+let hideTimer = null;
+
+function focusInfo(obj){
+  const data = obj.userData;
+  infoTitle.textContent = data.name;
+  infoBody.textContent = data.info;
+  infoPanel.classList.add('show');
+  clearTimeout(hideTimer);
+  hideTimer = setTimeout(()=> infoPanel.classList.remove('show'), 5000);
+}
+
+renderer.domElement.addEventListener('click', e=>{
+  // ignore click if it was a drag
+  mouseNDC.x = (e.clientX/innerWidth)*2-1;
+  mouseNDC.y = -(e.clientY/innerHeight)*2+1;
+  raycaster.setFromCamera(mouseNDC, camera);
+  const targets = clickables.filter(o=> o.parent === (state.mode==='space'?spaceScene:oceanScene));
+  const hits = raycaster.intersectObjects(targets, true);
+  if(hits.length){
+    let o = hits[0].object;
+    while(o && !o.userData.name) o = o.parent;
+    if(o) focusInfo(o);
+  }
+});
+
+/* =========================================================================
+   MODE SWITCH / TRANSITION
+   ========================================================================= */
+const veil = document.getElementById('veil');
+document.querySelectorAll('.mode-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const mode = btn.dataset.mode;
+    if(mode === state.mode) return;
+    document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    switchMode(mode);
+  });
+});
+
+function switchMode(mode){
+  veil.style.transition = 'opacity 0.6s ease';
+  veil.style.opacity = 1;
+  setTimeout(()=>{
+    state.mode = mode;
+    const cfg = modeConfig[mode];
+    state.pos.copy(cfg.pos); state.yaw = cfg.yaw; state.pitch = cfg.pitch; state.vel.set(0,0,0);
+    infoPanel.classList.remove('show');
+    document.getElementById('wordmark').innerHTML = mode==='space'
+      ? 'আলোর যাত্রা<span>Above the sky · A cosmos to wander</span>'
+      : 'আলোর যাত্রা<span>Below the sea · A reef to explore</span>';
+    setTimeout(()=>{ veil.style.opacity = 0; }, 60);
+  }, 620);
+}
+
+/* =========================================================================
+   ANIMATE
+   ========================================================================= */
+function animate(){
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const t = clock.elapsedTime;
+
+  updateMovement(dt);
+
+  // space animation
+  planets.forEach(p=>{
+    p.angle += dt*p.speed*0.05;
+    p.mesh.position.set(Math.cos(p.angle)*p.dist, 0, Math.sin(p.angle)*p.dist);
+    p.mesh.rotation.y += dt*0.15;
+  });
+  sunGroup.rotation.y += dt*0.02;
+  asteroidMesh.rotation.y += dt*0.01;
+
+  // ocean animation
+  fishSchools.forEach(school=>{
+    school.t += dt*school.def.speed*0.3;
+    school.center.x = Math.sin(school.t*0.6)*26;
+    school.center.z = Math.cos(school.t*0.5)*26;
+    school.fish.forEach(f=>{
+      f.userData.phase += dt*2;
+      const wob = f.userData.offset;
+      const tx = school.center.x + wob.x + Math.sin(t*0.7+f.userData.phase)*2;
+      const ty = school.def.y + wob.y + Math.sin(t*1.3+f.userData.phase)*0.6;
+      const tz = school.center.z + wob.z + Math.cos(t*0.7+f.userData.phase)*2;
+      const prev = f.position.clone();
+      f.position.set(tx,ty,tz);
+      const dir = f.position.clone().sub(prev);
+      if(dir.lengthSq()>0.0001){
+        const targetQuat = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(f.position, prev, THREE.Object3D.DEFAULT_UP));
+        f.quaternion.slerp(targetQuat, 0.15);
+      }
+      f.userData.tail.rotation.y = Math.sin(t*8+f.userData.phase)*0.6;
+    });
+  });
+  jellies.forEach(j=>{
+    j.userData.phase += dt;
+    j.position.y += Math.sin(j.userData.phase*0.8)*0.004;
+    j.scale.setScalar(1+Math.sin(j.userData.phase*1.4)*0.06);
+    j.userData.tentacles.forEach((tn,i)=> tn.rotation.z = Math.sin(t*1.5+i)*0.15);
+  });
+  const bp = bubbleGeo.attributes.position;
+  for(let i=0;i<bubbleCount;i++){
+    let y = bp.getY(i) + bubbleSpeed[i]*dt*2;
+    let x = bp.getX(i) + Math.sin(t+i)*0.01;
+    if(y>44){ y=-18; }
+    bp.setY(i,y); bp.setX(i,x);
+  }
+  bp.needsUpdate = true;
+
+  renderer.render(state.mode==='space'?spaceScene:oceanScene, camera);
+}
+
+addEventListener('resize', ()=>{
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// kick off
+setTimeout(()=>{ document.getElementById('loader').classList.add('hide'); }, 900);
+animate();
+</script>
+</body>
+</html>
